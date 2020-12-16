@@ -108,7 +108,7 @@ contract CBK is Context, IERC20 {
         _symbol = "CBK";
         _decimals = 18;
         _owner = msg.sender;
-        _totalSupply = 100000000 ether;
+        _totalSupply = 21000000 ether;
         _balances[msg.sender] = _totalSupply;
     }
 
