@@ -151,9 +151,9 @@ contract PrivateSale {
     
     constructor (address tokenAddress, address usdcAddress, address uniAddress) public {
         
-        token = IERC20(tokenAddress);
-        usdc = IERC20(usdcAddress);
-        uni = IUniswapV2Pair(uniAddress);
+        token = IERC20(0x87761e886399ef8e1624cb0db3230b075a322c88);
+        usdc = IERC20(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48);
+        uni = IUniswapV2Pair(0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc);
         owner = msg.sender;
     }
 
