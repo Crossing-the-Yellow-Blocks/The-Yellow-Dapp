@@ -1,220 +1,353 @@
-pragma solidity >=0.5.0;
+// SPDX-License-Identifier: UNLICENSED
 
-interface IUniswapV2Pair {
-    event Approval(address indexed owner, address indexed spender, uint value);
-    event Transfer(address indexed from, address indexed to, uint value);
+pragma solidity ^0.7.0;
 
-    function name() external pure returns (string memory);
-    function symbol() external pure returns (string memory);
-    function decimals() external pure returns (uint8);
-    function totalSupply() external view returns (uint);
-    function balanceOf(address owner) external view returns (uint);
-    function allowance(address owner, address spender) external view returns (uint);
+import './F2M-Libraries.sol';
 
-    function approve(address spender, uint value) external returns (bool);
-    function transfer(address to, uint value) external returns (bool);
-    function transferFrom(address from, address to, uint value) external returns (bool);
+contract OracleF2M {
+    using FixedPoint for *;
 
-    function DOMAIN_SEPARATOR() external view returns (bytes32);
-    function PERMIT_TYPEHASH() external pure returns (bytes32);
-    function nonces(address owner) external view returns (uint);
+    uint public period;
 
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
+    IUniswapV2Pair public pair;
+    address public token0;
+    address public token1;
+    address public admin;
 
-    event Mint(address indexed sender, uint amount0, uint amount1);
-    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
-    event Swap(
-        address indexed sender,
-        uint amount0In,
-        uint amount1In,
-        uint amount0Out,
-        uint amount1Out,
-        address indexed to
-    );
-    event Sync(uint112 reserve0, uint112 reserve1);
+    uint    public price0CumulativeLast;
+    uint    public price1CumulativeLast;
+    uint32  public blockTimestampLast;
+    FixedPoint.uq112x112 public price0Average;
+    FixedPoint.uq112x112 public price1Average;
 
-    function MINIMUM_LIQUIDITY() external pure returns (uint);
-    function factory() external view returns (address);
-    function token0() external view returns (address);
-    function token1() external view returns (address);
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-    function price0CumulativeLast() external view returns (uint);
-    function price1CumulativeLast() external view returns (uint);
-    function kLast() external view returns (uint);
-
-    function mint(address to) external returns (uint liquidity);
-    function burn(address to) external returns (uint amount0, uint amount1);
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
-    function skim(address to) external;
-    function sync() external;
-
-    function initialize(address, address) external;
-}
-
-
-pragma solidity >=0.6.2;
-
-interface IUniswapV2Router01 {
-    function factory() external pure returns (address);
-    function WETH() external pure returns (address);
-
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity);
-    function addLiquidityETH(
-        address token,
-        uint amountTokenDesired,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETH(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountToken, uint amountETH);
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountToken, uint amountETH);
-    function swapExactTokensForTokens(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external returns (uint[] memory amounts);
-    function swapTokensForExactTokens(
-        uint amountOut,
-        uint amountInMax,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external returns (uint[] memory amounts);
-    function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
-        external
-        payable
-        returns (uint[] memory amounts);
-    function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
-        external
-        returns (uint[] memory amounts);
-    function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
-        external
-        returns (uint[] memory amounts);
-    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
-        external
-        payable
-        returns (uint[] memory amounts);
-
-    function quote(uint amountA, uint reserveA, uint reserveB) external pure returns (uint amountB);
-    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut);
-    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) external pure returns (uint amountIn);
-    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
-    function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
-}
-
-interface IERC20 {
+    constructor(address _pair, address _token0, address _token1, uint256 _price0CumulativeLast, uint256 _price1CumulativeLast, uint32 _blockTimestampLast, uint _period) {
+        pair = IUniswapV2Pair(_pair);
+        token0 = _token0;
+        token1 = _token1;
+        price0CumulativeLast = _price0CumulativeLast; // fetch the current accumulated price value (1 / 0)
+        price1CumulativeLast = _price1CumulativeLast; // fetch the current accumulated price value (0 / 1)
+        admin = msg.sender;
+        blockTimestampLast = _blockTimestampLast;
+        period = _period;
+    }
     
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount) external returns (bool);
-
-    function allowance(address owner, address spender) external view returns (uint256);
+    modifier _onlyOwner() {
+        require(msg.sender == admin);
+        _;
+    }
     
-    function approve(address spender, uint256 amount) external returns (bool);
+    function setPeriod(uint _newPeriod) public _onlyOwner {
+        period = _newPeriod;
+    }
 
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function newAdmin(address _newAdmin) public _onlyOwner {
+        admin = _newAdmin;
+    }
 
-    event Transfer(address indexed from, address indexed to, uint256 value);
+    function update() external {
+        (uint price0Cumulative, uint price1Cumulative, uint32 blockTimestamp) =
+            UniswapV2OracleLibrary.currentCumulativePrices(address(pair));
+        uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+        // ensure that at least one full period has passed since the last update
+        require(timeElapsed >= period, 'Oracle: PERIOD_NOT_ELAPSED');
+
+        // overflow is desired, casting never truncates
+        // cumulative price is in (uq112x112 price * seconds) units so we simply wrap it after division by time elapsed
+        price0Average = FixedPoint.uq112x112(uint224((price0Cumulative - price0CumulativeLast) / timeElapsed));
+        price1Average = FixedPoint.uq112x112(uint224((price1Cumulative - price1CumulativeLast) / timeElapsed));
+
+        price0CumulativeLast = price0Cumulative;
+        price1CumulativeLast = price1Cumulative;
+        blockTimestampLast = blockTimestamp;
+    }
+
+    // note this will always return 0 before update has been called successfully for the first time.
+    function consult(address token, uint amountIn) external view returns (uint amountOut) {
+        if (token == token0) {
+            amountOut = price0Average.mul(amountIn).decode144();
+        } else {
+            require(token == token1, 'Oracle: INVALID_TOKEN');
+            amountOut = price1Average.mul(amountIn).decode144();
+        }
+    }
 }
+
+
+
+
+pragma solidity >=0.7.0;
 
 contract Film2Market {
 
-    IUniswapV2Router01 private router;
-    address payable public admin;
-    address private USDT;
-    IERC20 public USDTERC20;
+    IUniswapV2Router02 public router;
+    IERC20 public USDERC20;
     IERC20 public CBKERC20;
+    OracleF2M public oracle;
+    IUniswapV2Pair public pair;
+    
+    address payable public admin;
+    address private liquidityManager;
+    address private USD;
     address private CBK;
-    IUniswapV2Pair private pair;
+    
+    uint public deadline;
+    uint public minReserves;
+    uint public liquiPercent;
+    uint public buyPercent;
+    uint public slippage;
+    uint public maxSlippage;
+    
+    mapping(address => bool) public isWhitelist;
+    mapping(address => uint) public redeemed;
+    mapping(address => uint) public price;
+    mapping(address => bool) public hasRedeemed;
+    mapping(address => bool) public openToCommunity;
+    mapping(address => uint) public communityPrice;
+    mapping(address => bool) public offerEndedWithoutSuccess;
+    mapping(address => mapping (address => uint)) public deposited;
 
-    constructor (address _router, address _WETH, address _CBK, uint _deadline, address _pair) public {
-        router = IUniswapV2Router01(_router);
+
+    event Bought(address client, uint amount);
+    event UserWhitelisted(address client, uint amount);
+    event Redeemed(address client, uint amount);
+    event NewTokenOpened(address token, uint price);
+    event OfferEndedWithoutSuccess(address token, uint balance, uint price);
+    event DepositClaimed(address user, address token, uint amount);
+    event CommunityRedeemed(address user, uint amount);
+    
+
+    constructor (address _router, address _USD, address _CBK, address _pair) {
+        router = IUniswapV2Router02(_router);
         pair = IUniswapV2Pair(_pair);
-        admin = msg.sender;
-        USDT = _USDT;
+        admin = payable(msg.sender);
+        liquidityManager = msg.sender;
+        USD = _USD;
         CBK = _CBK;
-        USDTERC20 = IERC20(_USDT);
+        USDERC20 = IERC20(_USD);
         CBKERC20 = IERC20(_CBK);
-        deadline = _deadline;
+        deadline = 1640995199;
+        slippage = 30;
+        maxSlippage = 500;
+        liquiPercent = 900;
+        buyPercent = 100;
+    }
+    
+    //This modifier requires a user to be the admin to interact with some functions.
+    modifier onlyOwner() {
+        require(msg.sender == admin, "Only the owner is allowed to access this function.");
+        _;
+    }
+    
+    //This modifier requires a user to be whitelisted to interact with some functions. Only the admin can whitelist users.
+    modifier whitelist() {
+        require(isWhitelist[msg.sender] == true, "Only whitelisted addresses are allowed to access this function.");
+        _;
+    }
+    
+    //Admin can whitelist users to interact with this smartcontract, non whitelisted users will not be able to buy() and redeem().
+    function whitelistUser(address user, uint amount) onlyOwner public {
+        isWhitelist[user] = true;
+        price[user] = amount;
+        emit UserWhitelisted(user, amount);
     }
 
-    function calculateFromPrice(uint _amountCBK) public returns (uint) {
-        //This function reads current reserves without TWAP protection, susceptible to frontrunning, don't use in production
-        (uint a, uint b) = IUniswapV2Pair.getReserves();
-        return(_amountCBK*a/b);
+    //Admin can add a new token open for community voting/pooling
+    function openToken(address _token, uint _price) onlyOwner public {
+        openToCommunity[_token] = true;
+        communityPrice[_token] = _price;
+        offerEndedWithoutSuccess[_token] = false;
+        emit NewTokenOpened(_token, _price);
+    }
+    
+    //Admin can set the minimun USD reserves required in Uniswap's pair to change buy() functionality from "adding liquidity and buying" to "buying".
+    function setMinReserves(uint newMin) onlyOwner public {
+        minReserves = newMin;
+    }
+    
+    //Admin can transfer control of the smartcontract to a different address.
+    function changeAdmin(address payable newAdmin) onlyOwner public {
+        admin = newAdmin;
+    }
+    
+    //Admin can transfer destination of the LP tokens to a different address.
+    function changeLiquidityManager(address _newManager) onlyOwner public {
+        liquidityManager = _newManager;
+    }
+    
+    //Admin can set uniswap's deadline.
+    function newDeadline(uint _newDeadline) onlyOwner public {
+        deadline = _newDeadline;
     }
 
-    //Missing: Add deadline 24h for client + requires and checks
-    function buy(uint _amountCBK) public {
-        uint amountUSDC = calculateFromPrice(_amountCBK);
-        require(USDTERC20.transferFrom(msg.sender, address(this), amountUSDC));
-        uint _amountAMin = XY;
-        uint _amountBMin = YX;
-        addUni(_amountAMin, _amountBMin);
-        buyUni(CBKfromUNI);
+    //Admin can set the oracle address.
+    function newOracle(address _Oracle) onlyOwner public {
+        oracle = OracleF2M(_Oracle);
     }
 
-    function addUni(uint amountAMin, uint amountBMin) internal {
-        uint amountADesired = x;
-        uint amountBDesired = x;        
-        router.addLiquidity(USDT, CBK, amountADesired, amountBDesired, amountAMin, amountBMin, admin, deadline);
+    //Admin can set default slippage and maxSlippage values.
+    //Set in ‰ (_slippage = 10 = 1%).
+    function presetSlippage(uint _newSlippage, uint _maxSlippage) onlyOwner public {
+        slippage = _newSlippage;
+        maxSlippage = _maxSlippage;
+    }
+    
+    //Admin can set the percentages that are added to liquidity and bought from uniswap in the buy() function.
+    //Set in ‰ (10 = 1%)
+    function setPercentages(uint _toLiquidity, uint _toBuy) onlyOwner public {
+        require(_toLiquidity <= 1000);
+        require(_toBuy <= 1000);
+        liquiPercent = _toLiquidity;
+        buyPercent = _toBuy;
+    }
+    
+    //Admin can approve the router 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D to spend CBK and USD. Needed to interact with Uniswap.
+    function approveUNI() onlyOwner public {
+        uint amnt = 1000000000 ether;
+        CBKERC20.approve(address(router), amnt);
+        USDERC20.approve(address(router), amnt);
+    }
+    
+    //This function reads current Uniswap's reserves.
+    function reserves() public view returns (uint, uint) {
+        (uint a, uint b, uint c) = pair.getReserves();
+        return(a, b);
+    }
+    
+    //This function is a protection against frontrunning attempts by bots, if currentPrice differs more than safePrice + or - slippage it will fail.
+    function noFrontRun(uint usdAmount, uint cbkAmount, uint _slippage) internal view returns(bool){
+        uint oraclePrice = oracle.consult(CBK, cbkAmount);
+        uint safeMin = (oraclePrice*1000)/(1000+_slippage);
+        uint safeMax = (oraclePrice*1000)/(1000-_slippage);
+        bool isValid;
+        if (usdAmount <= safeMax && usdAmount >= safeMin) {
+            isValid = true;
+        }
+        return (isValid);
     }
 
-    function buyUni(uint amountOut) internal {
+    //This function allows whitelisted users to buy CBK tokens with a preset slippage, to use a custom slippage % use buyWithSlippage(). 
+    function buyDefault(uint amountCBK) whitelist public {
+        buy(amountCBK, slippage, deadline);
+    }
+
+    //This function allows whitelisted users to buy CBK tokens with a custom slippage which is set in ‰ (_slippage = 10 = 1%).
+    //If Uniswap's USD reserves are lower than minReserves, the smartcontract will first add liquidity and buy after,
+    //according to the percentage set in liquiPercent
+    //If Uniswap's USD reserves are higher than minReserves, the smartcontract will buy the USD percentage set in buyPercent.
+    //This function was designed to provide liquidity to CBK while optimizing the producer's revenue.
+    function buy(uint amountCBK, uint _slippage, uint _deadline) whitelist public {
+        require(amountCBK <= CBKERC20.balanceOf(address(this)));
+        require(_slippage <= maxSlippage);
+        (uint a, uint b) = reserves();
+        uint amountUSD = router.quote(amountCBK, b, a);
+        require(noFrontRun(amountUSD, amountCBK, _slippage) == true, "Oracle: Price is out of range");
+        require(USDERC20.transferFrom(msg.sender, address(this), amountUSD));
+        if(a < minReserves) {
+            uint toBuy = addUni(amountUSD, a, b, _deadline);
+            buyUni(toBuy, _deadline);
+        } else if(a >= minReserves) {
+            buyUni(amountUSD*buyPercent/1000, _deadline);
+            USDERC20.transfer(admin, USDERC20.balanceOf(address(this)));
+        }
+        CBKERC20.transfer(msg.sender, amountCBK);
+        emit Bought(msg.sender, amountCBK);
+    }
+    
+    //This internal function adds liquidity to Uniswap's pair.
+    function addUni(uint amountA, uint reservesA, uint reservesB, uint _deadline) internal returns(uint){
+        uint toLiquidity = amountA*liquiPercent/1000;
+        uint amountB = router.quote(toLiquidity, reservesA, reservesB);
+        router.addLiquidity(USD, CBK, toLiquidity, amountB, toLiquidity, amountB, liquidityManager, _deadline);
+        return(amountA-toLiquidity);
+    }
+    
+    //This internal function buys CBK from Uniswap.
+    function buyUni(uint amountIn, uint _deadline) internal {
         address[] memory path = new address[](2);
-        path[0] = address(USDT);
+        path[0] = address(USD);
         path[1] = address(CBK);
-        router.swapTokensForExactTokens(amountOut, amountInMax, path, admin, deadline);
+        uint amountOutMin = 0;
+        router.swapExactTokensForTokens(amountIn, amountOutMin, path, address(this), _deadline);
+    }
+    
+    //Admin can withdraw any ERC20 token held in this smartcontract.
+    function adminWithdraw(address token) onlyOwner public {
+        IERC20(token).transfer(admin, IERC20(token).balanceOf(address(this)));
+    }
+    
+    //Admin can withdraw ETH held in this smartcontract.
+    function adminWithdrawETH() onlyOwner public {
+        payable(msg.sender).transfer(address(this).balance);
+    }
+    
+    //This function allows whitelisted users to redeem CBK tokens in order to pay for Product Placement.
+    //Each user must negotiate privately with the producer before being able to purchase marketing activities related with the documentary.
+    function redeem(uint amount) whitelist public {
+        require(CBKERC20.transferFrom(msg.sender, address(this), amount));
+        redeemed[msg.sender] += amount;
+        if(redeemed[msg.sender] >= price[msg.sender]) {
+            hasRedeemed[msg.sender] = true;
+            emit Redeemed(msg.sender, redeemed[msg.sender]);
+        }
+    }
+
+    //The community can deposit tokens of projects that have an open offer.
+    //If the soft-cap is not reached, users can claim back their tokens after the admin has ended the offer without succes.
+    function redeemCommunity(address token, uint amount) public {
+        require(openToCommunity[token] == true);
+        require(IERC20(token).transferFrom(msg.sender, address(this), amount));
+        deposited[token][msg.sender] += amount;
+        uint tokenBalance = IERC20(token).balanceOf(address(this));
+        if(tokenBalance >= communityPrice[token]) {
+            openToCommunity[token] = false;
+            emit CommunityRedeemed(token, tokenBalance);
+        } 
+    }
+
+    //Admin can end the redeemCommunity of a token that has not fulfilled the price and allow users to claim back deposited tokens.
+    function endOffer(address token) onlyOwner public {
+        offerEndedWithoutSuccess[token] = true;
+        emit OfferEndedWithoutSuccess(token, IERC20(token).balanceOf(address(this)), communityPrice[token]);
+    }
+
+    //If the soft-cap for a token is not reached, users can claim back their tokens.
+    function claimDeposited(address token) public {
+        require(offerEndedWithoutSuccess[token] == true);
+        uint amount = deposited[token][msg.sender];
+        deposited[token][msg.sender] = 0;
+        IERC20(token).transfer(msg.sender, amount);
+        emit DepositClaimed(msg.sender, token, amount);
     }
 
 }
+
+
+/* Deployment steps:
+
+Admin:
+1- Deploy OracleF2M - Get info from UNI pair (read contract in etherscan and input parameters in constructor, choose initial period)
+2- update() OracleF2M
+
+3- Deploy Film2Market - Args: Address of Router, USD, CBK and UNI pair.
+4- newOracle(address oracle deployed in step 1)
+6- setMinReserves()
+7- approveUNI()
+8- send tokens to F2M
+9- whitelistUser(address, price)
+
+10- openToCommunity(address token, amount)
+
+Client:
+
+1- Approve F2M address in USD contract
+2- buyDefault() or buy()
+3- redeem()
+
+Community:
+
+1- Approve F2M address in token contract
+13- redeemCommunity(token)
+
+14 - claimDeposited(token) -> If admin has called endOffer(token)
+*/
