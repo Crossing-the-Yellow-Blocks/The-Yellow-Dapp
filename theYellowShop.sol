@@ -4,6 +4,8 @@ contract TheYellowShop {
 
     address payable public admin;
 
+    event Withdrawn(uint toAdmin, uint burnt);
+
     constructor (address _CBK) public {
         CBKERC20 = CBK(_CBK);
         admin = msg.sender;
@@ -25,5 +27,6 @@ contract TheYellowShop {
         CBKERC20.burnFrom(address(this), burnAmount);
         uint shopRedeemed = CBKERC20.balanceOf(address(this));
         CBKERC20.transferFrom(address(this), msg.sender, shopRedeemed);
+        emit Withdrawn(shopRedeemed, burnAmount);
     }
 }
