@@ -17,8 +17,7 @@ contract TheYellowShop {
         _;
     }
 
-    function approveBurn() public onlyOwner {
-        uint amount = 1000000 ether;
+    function approveShop(uint amount) public onlyOwner {
         CBKERC20.increaseAllowance(address(this), amount);
     }
 
