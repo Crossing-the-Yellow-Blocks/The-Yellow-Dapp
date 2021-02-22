@@ -1,8 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
-
 pragma solidity >=0.7.0;
-
-import './Oracle-F2m.sol';
 
 contract Film2Market {
 
@@ -27,6 +23,7 @@ contract Film2Market {
     mapping(address => bool) public isWhitelist;
     mapping(address => uint) public redeemed;
     mapping(address => uint) public price;
+    mapping(address => uint) public bought;
     mapping(address => bool) public hasRedeemed;
     mapping(address => bool) public openToCommunity;
     mapping(address => uint) public communityPrice;
@@ -134,6 +131,12 @@ contract Film2Market {
         USDERC20.approve(address(router), amnt);
     }
     
+     //Admin can end the redeemCommunity of a token. If it that has not fulfilled the price, it allow users to claim back deposited tokens.
+    function endOffer(address token) onlyOwner public {
+        offerEndedWithoutSuccess[token] = true;
+        emit OfferEndedWithoutSuccess(token, IERC20(token).balanceOf(address(this)), communityPrice[token]);
+    }
+    
     //This function reads current Uniswap's reserves.
     function reserves() public view returns (uint, uint) {
         (uint a, uint b, uint c) = pair.getReserves();
@@ -163,6 +166,7 @@ contract Film2Market {
     //If Uniswap's USD reserves are higher than minReserves, the smartcontract will buy the USD percentage set in buyPercent.
     //This function was designed to provide liquidity to CBK while optimizing the producer's revenue.
     function buy(uint amountCBK, uint _slippage, uint _deadline) whitelist public {
+        require(bought[msg.sender] + amountCBK <= price[msg.sender], "Amount exceeds allowance");
         require(amountCBK <= CBKERC20.balanceOf(address(this)));
         require(_slippage <= maxSlippage);
         (uint a, uint b) = reserves();
@@ -176,6 +180,7 @@ contract Film2Market {
             buyUni(amountUSD*buyPercent/1000, _deadline);
             USDERC20.transfer(admin, USDERC20.balanceOf(address(this)));
         }
+        bought[msg.sender] += amountCBK;
         CBKERC20.transfer(msg.sender, amountCBK);
         emit Bought(msg.sender, amountCBK);
     }
@@ -197,6 +202,7 @@ contract Film2Market {
         router.swapExactTokensForTokens(amountIn, amountOutMin, path, address(this), _deadline);
     }
     
+    
     //Admin can withdraw any ERC20 token held in this smartcontract.
     function adminWithdraw(address token) onlyOwner public {
         IERC20(token).transfer(admin, IERC20(token).balanceOf(address(this)));
@@ -210,7 +216,10 @@ contract Film2Market {
     //This function allows whitelisted users to redeem CBK tokens in order to pay for Product Placement.
     //Each user must negotiate privately with the producer before being able to purchase marketing activities related with the documentary.
     function redeem(uint amount) whitelist public {
-        require(CBKERC20.transferFrom(msg.sender, address(this), amount));
+        require(hasRedeemed[msg.sender] = false);
+        uint burnAmount = amount/20;
+        CBKERC20.burn(burnAmount);
+        require(CBKERC20.transferFrom(msg.sender, liquidityManager, amount - burnAmount));
         redeemed[msg.sender] += amount;
         if(redeemed[msg.sender] >= price[msg.sender]) {
             hasRedeemed[msg.sender] = true;
@@ -231,12 +240,6 @@ contract Film2Market {
         } 
     }
 
-    //Admin can end the redeemCommunity of a token that has not fulfilled the price and allow users to claim back deposited tokens.
-    function endOffer(address token) onlyOwner public {
-        offerEndedWithoutSuccess[token] = true;
-        emit OfferEndedWithoutSuccess(token, IERC20(token).balanceOf(address(this)), communityPrice[token]);
-    }
-
     //If the soft-cap for a token is not reached, users can claim back their tokens.
     function claimDeposited(address token) public {
         require(offerEndedWithoutSuccess[token] == true);
@@ -247,33 +250,3 @@ contract Film2Market {
     }
 
 }
-
-
-/* Deployment steps:
-
-Admin:
-1- Deploy OracleF2M - Get info from UNI pair (read contract in etherscan and input parameters in constructor, choose initial period)
-2- update() OracleF2M
-
-3- Deploy Film2Market - Args: Address of Router, USD, CBK and UNI pair.
-4- newOracle(address oracle deployed in step 1)
-6- setMinReserves()
-7- approveUNI()
-8- send tokens to F2M
-9- whitelistUser(address, price)
-
-10- openToCommunity(address token, amount)
-
-Client:
-
-1- Approve F2M address in USD contract
-2- buyDefault() or buy()
-3- redeem()
-
-Community:
-
-1- Approve F2M address in token contract
-13- redeemCommunity(token)
-
-14 - claimDeposited(token) -> If admin has called endOffer(token)
-*/
