@@ -70,7 +70,7 @@ contract Film2Market {
         _;
     }
     
-    //Admin can whitelist users to interact with this smartcontract, non whitelisted users will not be able to buy() and redeem().
+    //Admin can whitelist users to interact with this smartcontract, Only whitelisted users will be able to buy() and redeem() CBK tokens from F2M.
     function whitelistUser(address user, uint amount) onlyOwner public {
         isWhitelist[user] = true;
         price[user] = amount;
@@ -90,12 +90,12 @@ contract Film2Market {
         minReserves = newMin;
     }
     
-    //Admin can transfer control of the smartcontract to a different address.
+    //Admin can transfer control of this smartcontract to a different address.
     function changeAdmin(address payable newAdmin) onlyOwner public {
         admin = newAdmin;
     }
     
-    //Admin can transfer destination of the LP tokens to a different address.
+    //Admin can transfer destination of the LP tokens to a different admin address.
     function changeLiquidityManager(address _newManager) onlyOwner public {
         liquidityManager = _newManager;
     }
