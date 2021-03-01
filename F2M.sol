@@ -1,6 +1,6 @@
-pragma solidity >=0.7.0;
+pragma solidity >=0.6.0;
 
-import './Oracle-F2m.sol';
+import './F2M-lib.sol';
 
 contract Film2Market {
 
@@ -42,7 +42,7 @@ contract Film2Market {
     event CommunityRedeemed(address user, uint amount);
     
 
-    constructor (address _router, address _USD, address _CBK, address _pair) {
+    constructor (address _router, address _USD, address _CBK, address _pair) public {
         router = IUniswapV2Router02(_router);
         pair = IUniswapV2Pair(_pair);
         admin = payable(msg.sender);
