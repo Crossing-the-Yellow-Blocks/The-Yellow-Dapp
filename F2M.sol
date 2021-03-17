@@ -242,13 +242,11 @@ contract Film2Market {
         } 
     }
 
-    //If the soft-cap for a token is not reached, users can claim back their tokens.
-    function claimDeposited(address token) public {
-        require(offerEndedWithoutSuccess[token] == true);
-        uint amount = deposited[token][msg.sender];
-        deposited[token][msg.sender] = 0;
-        IERC20(token).transfer(msg.sender, amount);
-        emit DepositClaimed(msg.sender, token, amount);
+    //This function is used to route from the deposited project tokens to the x% amount of CBK. The amount the Dapp buyes in AAA/ETH/CBK during the workflow. Onlyowner.
+    function pushtouniswap 
+    
+       
     }
+    
 
 }
