@@ -242,13 +242,6 @@ contract Film2Market {
         } 
     }
 
-    //If the soft-cap for a token is not reached, users can claim back their tokens.
-    function claimDeposited(address token) public {
-        require(offerEndedWithoutSuccess[token] == true);
-        uint amount = deposited[token][msg.sender];
-        deposited[token][msg.sender] = 0;
-        IERC20(token).transfer(msg.sender, amount);
-        emit DepositClaimed(msg.sender, token, amount);
     }
 
 }
