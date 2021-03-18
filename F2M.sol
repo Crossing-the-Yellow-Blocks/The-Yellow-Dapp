@@ -242,7 +242,7 @@ contract Film2Market {
     }
 
     //The owner can convert an arbitrary amount of third-party tokens to CBK in Uniswap
-    function pushToUni(uint amount, uint amountOutMin, address[] memory path, uint _deadline) public {
+    function pushToUni(uint amount, uint amountOutMin, address[] memory path, uint _deadline) onlyOwner public {
         buyUni(amount, amountOutMin, path, _deadline);
     }
 
