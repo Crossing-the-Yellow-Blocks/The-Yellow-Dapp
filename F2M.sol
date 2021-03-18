@@ -175,11 +175,14 @@ contract Film2Market {
         uint amountUSD = router.quote(amountCBK, b, a);
         require(noFrontRun(amountUSD, amountCBK, _slippage) == true, "Oracle: Price is out of range");
         require(USDERC20.transferFrom(msg.sender, address(this), amountUSD));
+        address[] memory path = new address[](2);
+        path[0] = address(USD);
+        path[1] = address(CBK);
         if(a < minReserves) {
             uint toBuy = addUni(amountUSD, a, b, _deadline);
-            buyUni(toBuy, _deadline);
+            buyUni(toBuy, 0, path, _deadline);
         } else if(a >= minReserves) {
-            buyUni(amountUSD*buyPercent/1000, _deadline);
+            buyUni(amountUSD*buyPercent/1000, 0, path, _deadline);
             USDERC20.transfer(admin, USDERC20.balanceOf(address(this)));
         }
         bought[msg.sender] += amountCBK;
@@ -196,11 +199,7 @@ contract Film2Market {
     }
     
     //This internal function buys CBK from Uniswap.
-    function buyUni(uint amountIn, uint _deadline) internal {
-        address[] memory path = new address[](2);
-        path[0] = address(USD);
-        path[1] = address(CBK);
-        uint amountOutMin = 0;
+    function buyUni(uint amountIn, uint amountOutMin, address[] memory path, uint _deadline) internal {
         router.swapExactTokensForTokens(amountIn, amountOutMin, path, address(this), _deadline);
     }
     
