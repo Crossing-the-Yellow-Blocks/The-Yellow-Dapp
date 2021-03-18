@@ -242,6 +242,4 @@ contract Film2Market {
         } 
     }
 
-    }
-
 }
