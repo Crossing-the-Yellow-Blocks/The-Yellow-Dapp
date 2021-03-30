@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-import './F2M-lib.sol';
+import './F2M-Libraries.sol';
 
 contract Film2Market {
 
@@ -141,7 +141,7 @@ contract Film2Market {
     
     //This function reads current Uniswap's reserves.
     function reserves() public view returns (uint, uint) {
-        (uint a, uint b, uint c) = pair.getReserves();
+        (uint a, uint b, ) = pair.getReserves();
         return(a, b);
     }
     
