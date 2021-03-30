@@ -245,5 +245,10 @@ contract Film2Market {
     function pushToUni(uint amount, uint amountOutMin, address[] memory path, uint _deadline) onlyOwner public {
         buyUni(amount, amountOutMin, path, _deadline);
     }
+    
+    //Approve Uniswap Router address for a token to be pushed to Uniswap (Buy CBK)
+    function approveToken(address token, uint amount) onlyOwner public {
+        IERC20(token).approve(address(router), amount);
+    }
 
 }
