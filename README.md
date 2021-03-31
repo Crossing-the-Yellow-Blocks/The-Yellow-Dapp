@@ -1,20 +1,26 @@
 The Yellow Dapp
+Getting Started
+The Yellow dAPP is a decentralized platform that facilitates the funding and management of audiovisual projects. After tokenizing each frame and millisecond in digital content and converting it into actual virtual assets, token holders will contribute to the proposed community-driven platform and generate additional value to Blockchain projects. 
+ 
+Prerequisites
+-Non-custodial wallet: recommend Metamask or wallet connect.
+-A compatible internet browser.
+-Project tokens amount (of the whitelisted project) in your wallet address.
 
-The Yellow Dapp is a comprehensive blockchain-based system that is capable of managing the entire economic life cycle of the film production”.
-
-The proposed film and business model include reserved slots for crypto community exposure. In the docuseries episodes, those crypto communities play a key role in the use case of CBK tokens by booking those slots through the Dapp.
-
-
-The Yellow Dapp establishes a collaborative and inclusive environment where different parts of the ecosystem meet around this Ethereum token. 
-It substitutes Fiat payments using the Film2market.sol solidity functions.
-
-Crypto communities seeking to be part of the content can use Film2market.sol to buy/redeem CBK tokens. Community initiatives in this system can expect a top tier exposure while contributing to the main general purpose of divulgation. 
-
-
-The Yellow Dapp is a “Partially upgradable'' open-source Ethereum Smart Contract serving as a payment system itself while managing the liquidity strategy and setting the film financial workflow. Calculations are intended to secure holders' dependency on volume, price, and liquidity. 
-
-
-Liquidity is defined as the capacity that exists on an exchange for users to convert funds from one asset to another easily. Without liquidity holders have no guarantee that they will be able to exit when their financial situation requires it. Liquidity is critical to the functioning of a decentralized exchange (DEX) like Uniswap.
-
-
-This Smart Contract creates an On-Chain version of a Buy&Redeem system. The customer autonomously interacts with the proposed contract with no middle-men.
+  How to use the Dapp
+Once you have the above ready, open the following link (.....), which directs you to the Yellow dAPP. You select the project in question, which if it reaches the established amount, will be exchanged for time exposure in a top tier VOD in exchange for your contribution in project tokens. If the marked amount is reached, the redeemed will be activated by exchanging the project tokens for CBK, and these CBKs for time exposure in a top-tier platform.
+ 
+Built With
+Solidity- To deploy the dAPP smart-contract
+Web3- To connect the frontend to the Blockchain
+Contributing
+To contribute to the dAPP it is necessary to have whitelisted the project token in question. Anyone can request the token whitelist by completing this google form. Finally, the team studies the proposed projects and the selected will have a smart contract where the community will participate to reach the estimated amount to get this exposure time on the Crossing the Yellow Blocks docuseries.
+Authors
+Alejandro Hevia - Film Producer - Come to Land SLU
+Alex Armengol - Establisment disruptor
+License
+This project is licensed under the MIT License - see the LICENSE.md file for details
+Acknowledgments
+Hat tip to anyone whose code was used
+Inspiration
+etc
