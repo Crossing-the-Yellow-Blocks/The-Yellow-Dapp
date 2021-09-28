@@ -154,6 +154,24 @@ library SafeMath {
         require(b != 0, errorMessage);
         return a % b;
     }
+    
+    function min(uint x, uint y) internal pure returns (uint z) {
+        z = x < y ? x : y;
+    }
+
+    // babylonian method (https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method)
+    function sqrt(uint y) internal pure returns (uint z) {
+        if (y > 3) {
+            z = y;
+            uint x = y / 2 + 1;
+            while (x < z) {
+                z = x;
+                x = (y / x + x) / 2;
+            }
+        } else if (y != 0) {
+            z = 1;
+        }
+    }
 }
 
 
@@ -250,39 +268,6 @@ library FixedPoint {
 }
 
 pragma solidity >=0.5.0;
-
-
-// library with helper methods for oracles that are concerned with computing average prices
-library UniswapV2OracleLibrary {
-    using FixedPoint for *;
-
-    // helper function that returns the current block timestamp within the range of uint32, i.e. [0, 2**32 - 1]
-    function currentBlockTimestamp() internal view returns (uint32) {
-        return uint32(block.timestamp % 2 ** 32);
-    }
-
-    // produces the cumulative price using counterfactuals to save gas and avoid a call to sync.
-    function currentCumulativePrices(
-        address pair
-    ) internal view returns (uint price0Cumulative, uint price1Cumulative, uint32 blockTimestamp) {
-        blockTimestamp = currentBlockTimestamp();
-        price0Cumulative = IUniswapV2Pair(pair).price0CumulativeLast();
-        price1Cumulative = IUniswapV2Pair(pair).price1CumulativeLast();
-
-        // if time has elapsed since the last update on the pair, mock the accumulated price values
-        (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast) = IUniswapV2Pair(pair).getReserves();
-        if (blockTimestampLast != blockTimestamp) {
-            // subtraction overflow is desired
-            uint32 timeElapsed = blockTimestamp - blockTimestampLast;
-            // addition overflow is desired
-            // counterfactual
-            price0Cumulative += uint(FixedPoint.fraction(reserve1, reserve0)._x) * timeElapsed;
-            // counterfactual
-            price1Cumulative += uint(FixedPoint.fraction(reserve0, reserve1)._x) * timeElapsed;
-        }
-    }
-}
-
 
 interface IUniswapV2Pair {
     event Approval(address indexed owner, address indexed spender, uint value);
@@ -588,75 +573,4 @@ interface IERC20 {
     event Transfer(address indexed from, address indexed to, uint256 value);
 
     event Approval(address indexed owner, address indexed spender, uint256 value);
-}
-
-pragma solidity ^0.6.6;
-
-contract OracleF2M {
-    using FixedPoint for *;
-
-    uint public period;
-
-    IUniswapV2Pair public pair;
-    address public token0;
-    address public token1;
-    address public admin;
-
-    uint    public price0CumulativeLast;
-    uint    public price1CumulativeLast;
-    uint32  public blockTimestampLast;
-    FixedPoint.uq112x112 public price0Average;
-    FixedPoint.uq112x112 public price1Average;
-
-    constructor(address _pair, address _token0, address _token1, uint256 _price0CumulativeLast, uint256 _price1CumulativeLast, uint32 _blockTimestampLast, uint _period) public {
-        pair = IUniswapV2Pair(_pair);
-        token0 = _token0;
-        token1 = _token1;
-        price0CumulativeLast = _price0CumulativeLast; // fetch the current accumulated price value (1 / 0)
-        price1CumulativeLast = _price1CumulativeLast; // fetch the current accumulated price value (0 / 1)
-        admin = msg.sender;
-        blockTimestampLast = _blockTimestampLast;
-        period = _period;
-    }
-    
-    modifier _onlyOwner() {
-        require(msg.sender == admin);
-        _;
-    }
-    
-    function setPeriod(uint _newPeriod) public _onlyOwner {
-        period = _newPeriod;
-    }
-
-    function newAdmin(address _newAdmin) public _onlyOwner {
-        admin = _newAdmin;
-    }
-
-    function update() external {
-        (uint price0Cumulative, uint price1Cumulative, uint32 blockTimestamp) =
-            UniswapV2OracleLibrary.currentCumulativePrices(address(pair));
-        uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
-
-        // ensure that at least one full period has passed since the last update
-        require(timeElapsed >= period, 'Oracle: PERIOD_NOT_ELAPSED');
-
-        // overflow is desired, casting never truncates
-        // cumulative price is in (uq112x112 price * seconds) units so we simply wrap it after division by time elapsed
-        price0Average = FixedPoint.uq112x112(uint224((price0Cumulative - price0CumulativeLast) / timeElapsed));
-        price1Average = FixedPoint.uq112x112(uint224((price1Cumulative - price1CumulativeLast) / timeElapsed));
-
-        price0CumulativeLast = price0Cumulative;
-        price1CumulativeLast = price1Cumulative;
-        blockTimestampLast = blockTimestamp;
-    }
-
-    // note this will always return 0 before update has been called successfully for the first time.
-    function consult(address token, uint amountIn) external view returns (uint amountOut) {
-        if (token == token0) {
-            amountOut = price0Average.mul(amountIn).decode144();
-        } else {
-            require(token == token1, 'Oracle: INVALID_TOKEN');
-            amountOut = price1Average.mul(amountIn).decode144();
-        }
-    }
 }
