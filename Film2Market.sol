@@ -11,6 +11,8 @@ contract Film2Market {
     address public admin;
     address private liquidityManager;
     address public CBK;
+    
+    address[] public pathUSD;
 
     uint public liquidityPercent;
     uint public slippage;
@@ -19,6 +21,7 @@ contract Film2Market {
         bool accepted;//The project has been explicitly accepted to participate in the YellowDapp. Other projects can also participate.
         uint price;//Price in CBK 
         uint redeemedCBK;//The amount of CBK that have been purchased with a certain token
+        uint redeemedUSD;//The USD value of redeemedCBK for a certain token
         uint converted;//The amount of tokens that have been converted to CBK
         bool finalizedWithoutSuccess;//There's a timeline and ethics behind production. A token that doesn't redeem enough CBK in time or does not comply with our ethic code can have its offer finalized. 
         bool finalizedWithSuccess;//Enough CBK have been redeemed and the producer will begin filming about the project.
@@ -62,6 +65,7 @@ contract Film2Market {
         registerRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E, 25, "Pancakeswap", 3990000, 3990006, 19975, 1995);
         registerPair(0x2F5C1A13b3d67211a30098E134c71F8Dea8C6303, 0x10ED43C718714eb63d5aA57B78B54704E256024E);
         setSlippage(20);
+        pathUSD = [0x4f60a160D8C2DDdaAfe16FCC57566dB84D674BD6, 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56];
     }
     
     //MODIFIER
@@ -149,6 +153,15 @@ contract Film2Market {
         emit FinalizedWithoutSuccess(token, IERC20(token).balanceOf(address(this)), tokens[token].converted, tokens[token].redeemedCBK, tokens[token].price);
     }
     
+    function checkValueUSDforCBK(uint amountCBK) public view returns(uint) {
+        uint amountOut = IUniswapV2Router01(pairs[address(defaultPair)].routerAddress).getAmountsOut(amountCBK, pathUSD);
+        return amountOut;
+    }
+    
+    function setPathUSD(address[] memory _path) onlyOwner public {
+        pathUSD = _path;
+    }
+    
     //The owner can convert an arbitrary amount of third-party tokens to CBK in a DEX
     //The CBK obtained and the tokens spent are counted
     function convertTokenToCBK(uint amount, uint amountOutMin, address[] memory path, address router) onlyOwner public returns(uint) {
@@ -161,6 +174,8 @@ contract Film2Market {
         uint bought = balanceAfterCBK-balanceBeforeCBK;
         uint spent = balanceBeforeToken-balanceAfterToken;
         tokens[token].redeemedCBK += bought;
+        uint usd = checkValueUSDforCBK(bought);
+        tokens[token].redeemedUSD += usd;
         tokens[token].converted += spent;
         checkIfFinalized(token);
         emit Converted(token,spent,bought);
