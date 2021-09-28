@@ -154,8 +154,9 @@ contract Film2Market {
     }
     
     function checkValueUSDforCBK(uint amountCBK) public view returns(uint) {
-        uint amountOut = IUniswapV2Router01(pairs[address(defaultPair)].routerAddress).getAmountsOut(amountCBK, pathUSD);
-        return amountOut;
+        (uint[] memory amountsOut) = IUniswapV2Router01(pairs[address(defaultPair)].routerAddress).getAmountsOut(amountCBK, pathUSD);
+        uint i = amountsOut.length - 1;
+        return amountsOut[i];
     }
     
     function setPathUSD(address[] memory _path) onlyOwner public {
