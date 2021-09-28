@@ -51,8 +51,8 @@ contract Film2Market {
     event Converted(address indexed token, uint spent, uint bought);
     event Deposited(address indexed user, address indexed token, uint amount);
     event NewTokenAccepted(address indexed token, uint price);
-    event FinalizedWithoutSuccess(address indexed token, uint balance, uint spent, uint redeemed, uint price);
-    event FinalizedWithSuccess(address indexed token, uint spent, uint redeemed, uint price);
+    event FinalizedWithoutSuccess(address indexed token, uint balance, uint usd, uint spent, uint redeemed, uint price);
+    event FinalizedWithSuccess(address indexed token, uint usd, uint spent, uint redeemed, uint price);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
 
@@ -150,7 +150,7 @@ contract Film2Market {
     function endOffer(address token) onlyOwner public {
         tokens[token].finalizedWithoutSuccess = true;
         tokens[token].accepted = false;
-        emit FinalizedWithoutSuccess(token, IERC20(token).balanceOf(address(this)), tokens[token].converted, tokens[token].redeemedCBK, tokens[token].price);
+        emit FinalizedWithoutSuccess(token, IERC20(token).balanceOf(address(this)), tokens[token].converted, tokens[token].redeemedUSD, tokens[token].redeemedCBK, tokens[token].price);
     }
     
     function checkValueUSDforCBK(uint amountCBK) public view returns(uint) {
@@ -270,9 +270,9 @@ contract Film2Market {
 
     //Check if a token has been converted to enough CBK
     function checkIfFinalized(address token) internal {
-        if(tokens[token].accepted == true && tokens[token].redeemedCBK >= tokens[token].price) {
+        if(tokens[token].accepted == true && tokens[token].redeemedUSD >= tokens[token].price) {
             tokens[token].finalizedWithSuccess = true;
-            emit FinalizedWithSuccess(token, tokens[token].converted, tokens[token].redeemedCBK, tokens[token].price);
+            emit FinalizedWithSuccess(token, tokens[token].converted, tokens[token].redeemedUSD, tokens[token].redeemedCBK, tokens[token].price);
         }
     }
 }
