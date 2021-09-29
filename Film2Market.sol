@@ -1,3 +1,4 @@
+//SPDX-License-Identifier: MIT
 pragma solidity >=0.6.0;
 
 import './F2M-Libraries.sol';
@@ -6,24 +7,24 @@ contract Film2Market {
     
     using SafeMath for uint;
 
-    IUniswapV2Pair public defaultPair;
+    IUniswapV2Pair public defaultPair;//Default pair used to manage liquidity
 
-    address public admin;
-    address private liquidityManager;
-    address public CBK;
+    address public admin;//Owner of the smartcontract
+    address private liquidityManager;//Address of the LP token receiver
+    address public CBK;//Address of CBK
     
-    address[] public pathUSD;
+    address[] public pathUSD;//Path to calculate USD value of CBK
 
-    uint public liquidityPercent;
-    uint public slippage;
+    uint public liquidityPercent;//Percentage to add to liquidity in addLiquidity()
+    uint public slippage;//Slippage percentage
     
     struct Token {
         bool accepted;//The project has been explicitly accepted to participate in the YellowDapp. Other projects can also participate.
         uint price;//Price in CBK 
         uint redeemedCBK;//The amount of CBK that have been purchased with a certain token
-        uint redeemedUSD;//The USD value of redeemedCBK for a certain token
+        uint redeemedUSD;//The USD value of redeemedCBK for a certain token at conversion time
         uint converted;//The amount of tokens that have been converted to CBK
-        bool finalizedWithoutSuccess;//There's a timeline and ethics behind production. A token that doesn't redeem enough CBK in time or does not comply with our ethic code can have its offer finalized. 
+        bool finalizedWithoutSuccess;//A token that doesn't redeem enough CBK in time or does not comply with our ethic code can have its offer finalized. 
         bool finalizedWithSuccess;//Enough CBK have been redeemed and the producer will begin filming about the project.
     }
 
@@ -36,10 +37,11 @@ contract Film2Market {
     struct Router {
         string dexName;//Name of the protocol
         uint fee;//The swap fee percentage that each protocol charges.
-        uint param1;//Parameters used to do calculations to add liquidity
-        uint param2;
-        uint param3;
-        uint param4;
+        //Parameters used to do calculations to convert CBK to CBK-LP
+        uint param1;//param2-(fee^2)
+        uint param2;//param3^2
+        uint param3;//20000-fee
+        uint param4;//20000-(fee*2)
         bool registeredRouter;//Returns true if the Router has been registered.
     }
     
@@ -62,7 +64,7 @@ contract Film2Market {
         liquidityManager = msg.sender;
         CBK = 0x4f60a160D8C2DDdaAfe16FCC57566dB84D674BD6;
         liquidityPercent = 1000;
-        registerRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E, 25, "Pancakeswap", 3990000, 3990006, 19975, 1995);
+        registerRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E, 25, "Pancakeswap", 399000000, 399000625, 19975, 19950);
         registerPair(0x2F5C1A13b3d67211a30098E134c71F8Dea8C6303, 0x10ED43C718714eb63d5aA57B78B54704E256024E);
         setSlippage(20);
         pathUSD = [0x4f60a160D8C2DDdaAfe16FCC57566dB84D674BD6, 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56];
@@ -70,7 +72,9 @@ contract Film2Market {
     
     //MODIFIER
     
-    //This modifier requires a user to be the admin to interact with some functions.
+    /**
+     * @dev This modifier requires a user to be the admin to interact with some functions.
+     */
     modifier onlyOwner() {
         require(msg.sender == admin, "Only the owner is allowed to access this function.");
         _;
@@ -79,8 +83,12 @@ contract Film2Market {
 
     //PUBLIC
 
-    //The public can deposit tokens of accepted projects.
-    //First users need to approve this smartcontract address in the token they wish to deposit.
+    /**
+     * @dev The public can deposit tokens of accepted projects.
+     * First users need to approve this smartcontract address in the token they wish to deposit.
+     * @param token Token to deposit
+     * @param amount Amount of token to deposit
+     */
     function depositToken(address token, uint amount) public {
         require(tokens[token].accepted == true, "Token not accepted");
         require(IERC20(token).transferFrom(msg.sender, address(this), amount), "transferFrom() failed");
@@ -91,17 +99,27 @@ contract Film2Market {
     
     //MANAGER - OnlyOwner
     
-    //Admin can withdraw an amount any ERC20 token held in this smartcontract.
+    /**
+     * @dev Admin can withdraw any amount of ERC20 token held in this smartcontract.
+     * @param token Token to withdraw
+     */
     function adminWithdrawToken(address token, uint amount) onlyOwner public {
         IERC20(token).transfer(admin, amount);
     }
     
-    //Admin can withdraw ALL balance of any ERC20 token held in this smartcontract.
+    /**
+     * @dev Admin can withdraw ALL balance of any ERC20 token held in this smartcontract.
+     * @param token Token to withdraw
+     */
     function adminWithdrawTokenAll(address token) onlyOwner public {
         adminWithdrawToken(token, IERC20(token).balanceOf(address(this)));
     }
     
-    //Admin can add a new token for community voting/pooling
+    /**
+     * @dev Admin can add a new token for community voting/pooling
+     * @param token Token/Project to accept
+     * @param _price Price in USD (wei). Pay attention if the USD used in pathUSD is not 18 decimals.
+     */
     function acceptToken(address token, uint _price) onlyOwner public {
         tokens[token].accepted = true;
         tokens[token].price = _price;
@@ -109,7 +127,12 @@ contract Film2Market {
         emit NewTokenAccepted(token, _price);
     }
 
-    //Admin can register a new pair.
+    /**
+     * @dev Admin can register a new pair.
+     * Router must be registered before.
+     * @param newPair Pair address (LP)
+     * @param router Router address (LP) used to swap in newPair
+     */
     function registerPair(address newPair, address router) onlyOwner public {
         require(routers[router].registeredRouter == true, "Router not registered");
         pairs[newPair].routerAddress = router;//Address of the router
@@ -117,7 +140,12 @@ contract Film2Market {
         pairs[newPair].registeredPair = true;
     }
     
-    //Admin can register a new router.
+    /**
+     * @dev Admin can register a new router.
+     * @param router Address of the royter
+     * @param fee Divide 'fee' by 100 to get % (25 = 0.25%)
+     * @param dexName Informative string with the name of the protocol
+     */
     function registerRouter(address router, uint fee, string memory dexName, uint _param1, uint _param2, uint _param3, uint _param4) onlyOwner public {
         routers[router].fee = fee;//The swap fee percentage that each protocol charges *100: For a 0.3% fee -> input 30. 
         routers[router].dexName = dexName;//Name of the protocol
@@ -128,43 +156,72 @@ contract Film2Market {
         routers[router].registeredRouter = true;
     }
 
-    //Admin can set a new default pair for liquidity management
+    /**
+     * @dev Admin can set a new default pair for liquidity management.
+     * Pair must be registered before.
+     * @param _pair Pair address (LP)
+     */
     function setDefaultPair(address _pair) onlyOwner public {
         require(pairs[_pair].registeredPair == true, "Pair not registered");
         defaultPair = IUniswapV2Pair(_pair);
     }
     
-    //Admin can transfer destination of the LP tokens to a different admin address.
-    function changeLiquidityManager(address _newManager) onlyOwner public {
-        liquidityManager = _newManager;
+    /**
+     * @dev Change address of LP tokens receiver for addLiquidity()
+     * @param _liquidityManager New receiver address
+     */
+    function changeLiquidityManager(address _liquidityManager) onlyOwner public {
+        liquidityManager = _liquidityManager;
     }
     
-    //Admin can set the percentages that are added to liquidity in the addLiquidity() function.
-    //Set in ‰ (10 = 1%)
-    function setLiquidityPercentage(uint _toLiquidity) onlyOwner public {
-        require(_toLiquidity <= 1000, "Max liquidityPercent: 1000");
-        liquidityPercent = _toLiquidity;
+    /**
+     * @dev Admin can set the percentages that are added to liquidity in the addLiquidity() function.
+     * @param _liquidityPercent Set in ‰ (10 = 1%)
+     */
+    function setLiquidityPercentage(uint _liquidityPercent) onlyOwner public {
+        require(_liquidityPercent <= 1000, "Max liquidityPercent: 1000");
+        liquidityPercent = _liquidityPercent;
     }
 
-    //Admin can end the offer of a token.
+    /**
+     * @dev The admin can cancel the offer to a project.
+     * @param token Address of the token.
+     */
     function endOffer(address token) onlyOwner public {
         tokens[token].finalizedWithoutSuccess = true;
         tokens[token].accepted = false;
         emit FinalizedWithoutSuccess(token, IERC20(token).balanceOf(address(this)), tokens[token].converted, tokens[token].redeemedUSD, tokens[token].redeemedCBK, tokens[token].price);
     }
     
+    /**
+     * @dev Uses pathUSD in defaultPair's router
+     * @return USD value of amountCBK
+     * @param amountCBK Amount of CBK
+     */
     function checkValueUSDforCBK(uint amountCBK) public view returns(uint) {
         (uint[] memory amountsOut) = IUniswapV2Router01(pairs[address(defaultPair)].routerAddress).getAmountsOut(amountCBK, pathUSD);
         uint i = amountsOut.length - 1;
         return amountsOut[i];
     }
-    
+
+    /**
+     * @dev The owner can set a new path to calculate USD value of CBK
+     * @param _path Array of addresses where: first = CBK, last = USD
+     */
     function setPathUSD(address[] memory _path) onlyOwner public {
         pathUSD = _path;
     }
     
-    //The owner can convert an arbitrary amount of third-party tokens to CBK in a DEX
-    //The CBK obtained and the tokens spent are counted
+    /**
+     * @dev The owner can convert an arbitrary amount of third-party tokens to CBK in a DEX
+     * The CBK obtained and the tokens spent are counted
+     * @return Amount of CBK bought
+     * @param amount Desired amount of token to be sold
+     * @param amountOutMin Minimum amount of CBK to be bought
+     * @param path Array of addresses where 1st position is the token to sell and last the token to buy.
+     * Minimum 2 tokens, but can incude intermediary routes.
+     * @param router Address of the DEX router used
+     */
     function convertTokenToCBK(uint amount, uint amountOutMin, address[] memory path, address router) onlyOwner public returns(uint) {
         address token = path[0];
         uint balanceBeforeCBK = IERC20(CBK).balanceOf(address(this));
@@ -183,16 +240,24 @@ contract Film2Market {
         return bought;
     }
     
-    //Function used to calculate the amount of CBK that need to be sold in order to add 100% of the selected amount value to liquidity.
+    /**
+     * @dev Function used to calculate the amount of CBK that need to be sold in order to add 100% of the selected amount value to liquidity.
+     * @return Amount to be sold
+     * @param reserveAmount Amount of reserve token in the LP pair
+     * @param amount Amount of CBK to be converted to LP
+     */
     function calculateOtherHalf(uint reserveAmount, uint amount) onlyOwner public view returns(uint) {
         address defaultRoute = pairs[address(defaultPair)].routerAddress;
         uint half = SafeMath.sqrt(reserveAmount.mul(amount.mul(routers[defaultRoute].param1)
         .add(reserveAmount.mul(routers[defaultRoute].param2))))
-        .sub(reserveAmount.mul(routers[defaultRoute].param3).div(10)) / routers[defaultRoute].param4;
+        .sub(reserveAmount.mul(routers[defaultRoute].param3)) / routers[defaultRoute].param4;
         return half;
     }
     
-    //The owner can convert an arbitrary amount of CBK in a DEX for an equal value of LP tokens
+    /**
+     * @dev The owner can convert an arbitrary amount of CBK in a DEX for an equal value of LP tokens
+     * @param _amount Amount of CBK to be converted to LP
+     */
     function CBKtoLP(uint _amount) onlyOwner public {
         uint amount = _amount*liquidityPercent/1000;
         require(amount > 0);
@@ -206,69 +271,108 @@ contract Film2Market {
         path[0] = CBK;
         path[1] = pairs[address(defaultPair)].token;
         IUniswapV2Router02(pairs[address(defaultPair)].routerAddress).swapExactTokensForTokens(
-            amountHalved, 0, path, address(this), now);
+            amountHalved, 0, path, address(this), block.timestamp);
         uint CBKtoLiquidity = balanceBefore.sub(IERC20(CBK).balanceOf(address(this)));
         // 3. Mint LP tokens
         addLiquidity(CBKtoLiquidity);
     }
     
-    //The owner can convert an arbitrary amount of third-party tokens to CBK in a DEX and convert those CBK for an equal value of LP tokens
+    /**
+     * @dev The owner can convert an arbitrary amount of third-party tokens to CBK in a DEX
+     * and convert those CBK for an equal value of LP tokens
+     * @param amount Desired amount of token to be sold
+     * @param amountOutMin Minimum amount of CBK to be bought
+     * @param path Array of addresses where 1st position is the token to sell and last the token to buy.
+     * Minimum 2 tokens, but can incude intermediary routes.
+     * @param _router Address of the DEX router used
+     */
     function convertTokenToCBKLP(uint amount, uint amountOutMin, address[] memory path, address _router) onlyOwner public {
         uint toLP = convertTokenToCBK(amount, amountOutMin, path, _router);
         CBKtoLP(toLP);
     }
 
-    //Approve any amount of token in this smartcontract to be spent by spender
+    /**
+     * @dev Approve any amount of token held by this smartcontract to be spent by spender
+     * @param token Address of token.
+     * @param spender Address of spender.
+     * @param amount Amount in wei.
+     */
     function approveToken(address token, address spender, uint amount) onlyOwner public {
         IERC20(token).approve(spender, amount);
     }
     
-    //Transfers ownership of the contract to a new account (`newOwner`).
-    //Can only be called by the current owner.
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     * @param newOwner Address of the new owner.
+     * DO NOT input a Contract address that does not include a function to reclaim ownership.
+     * Funds will be permanently lost.
+     */
     function transferOwnership(address newOwner) public onlyOwner {
         require(newOwner != address(0), "Ownable: new owner is the zero address");
         _transferOwnership(newOwner);
     }
     
-    //Admin can set default slippage value.
-    //Set in ‰ (_slippage = 10 = 1%).
-    function setSlippage(uint _newSlippage) onlyOwner public {
-        slippage = _newSlippage;
+    /**
+     * @dev Set default slippage value in ‰ (_slippage = 10 -> 1%).
+     * @param _slippage Address of the new owner.
+     */
+    function setSlippage(uint _slippage) onlyOwner public {
+        slippage = _slippage;
     }
     
     
     //INTERNAL
 
-    //Transfers ownership of the contract to a new account (`newOwner`).
-    //Internal function without access restriction.
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * @param newOwner Address of the new owner.
+     */
     function _transferOwnership(address newOwner) internal {
         address oldOwner = admin;
         admin = newOwner;
         emit OwnershipTransferred(oldOwner, newOwner);
     }
     
-    //This function is a protection against frontrunning attempts by bots when adding liquidity
+    /**
+     * @dev This function is a protection against frontrunning attempts by bots when adding liquidity.
+     * @return Minimum amount of CBK to add to liquidity
+     * @param amountCBK Desired amount of CBK to be added
+     */
     function safeMin(uint amountCBK) internal view returns(uint){
         uint _safeMin = (amountCBK*1000)/(1000+slippage);
         return _safeMin;
     }
 
-    //Add liquidity to the DEX pool.
+    /**
+     * @dev Add liquidity to the DEX pool.
+     * @param amountCBK Desired amount of CBK to be added
+     */
     function addLiquidity(uint amountCBK) internal {
         uint tokenBalance = IERC20(pairs[address(defaultPair)].token).balanceOf(address(this));
         uint minCBK = safeMin(amountCBK);
         uint minToken = safeMin(tokenBalance);
         (, , uint lpAmount) = IUniswapV2Router02(pairs[address(defaultPair)].routerAddress).addLiquidity(
-        CBK, pairs[address(defaultPair)].token, amountCBK, tokenBalance, minCBK, minToken, liquidityManager, now);
+        CBK, pairs[address(defaultPair)].token, amountCBK, tokenBalance, minCBK, minToken, liquidityManager, block.timestamp);
         require(lpAmount >= 1, 'insufficient LP tokens received');
     }
 
-    //This internal function buys CBK from DEX using tokens.
+    /**
+     * @dev This internal function buys CBK from DEX using tokens.
+     * @param amountIn Desired amount of token to be sold
+     * @param amountOutMin Minimum amount of token to be bought
+     * @param path Array of addresses where 1st position is the token to sell and last the token to buy
+     * Minimum 2 tokens, but can incude intermediary routes.
+     * @param router Address of the DEX router used
+     */
     function swapTokens(uint amountIn, uint amountOutMin, address[] memory path, address router) internal {
-        IUniswapV2Router02(router).swapExactTokensForTokens(amountIn, amountOutMin, path, address(this), now);
+        IUniswapV2Router02(router).swapExactTokensForTokens(amountIn, amountOutMin, path, address(this), block.timestamp);
     }
 
-    //Check if a token has been converted to enough CBK
+    /**
+     * @dev Check if a token has been converted to enough CBK
+     * @param token Desired amount of CBK to be added
+     */
     function checkIfFinalized(address token) internal {
         if(tokens[token].accepted == true && tokens[token].redeemedUSD >= tokens[token].price) {
             tokens[token].finalizedWithSuccess = true;
