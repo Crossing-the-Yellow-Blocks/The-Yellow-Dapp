@@ -62,7 +62,7 @@ contract Film2Market {
         liquidityManager = msg.sender;
         CBK = 0x4f60a160D8C2DDdaAfe16FCC57566dB84D674BD6;
         liquidityPercent = 1000;
-        registerRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E, 25, "Pancakeswap", 3990000, 3990006, 19975, 1995);
+        registerRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E, 25, "Pancakeswap", 399000000, 399000625, 19975, 19950);
         registerPair(0x2F5C1A13b3d67211a30098E134c71F8Dea8C6303, 0x10ED43C718714eb63d5aA57B78B54704E256024E);
         setSlippage(20);
         pathUSD = [0x4f60a160D8C2DDdaAfe16FCC57566dB84D674BD6, 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56];
@@ -188,7 +188,7 @@ contract Film2Market {
         address defaultRoute = pairs[address(defaultPair)].routerAddress;
         uint half = SafeMath.sqrt(reserveAmount.mul(amount.mul(routers[defaultRoute].param1)
         .add(reserveAmount.mul(routers[defaultRoute].param2))))
-        .sub(reserveAmount.mul(routers[defaultRoute].param3).div(10)) / routers[defaultRoute].param4;
+        .sub(reserveAmount.mul(routers[defaultRoute].param3)) / routers[defaultRoute].param4;
         return half;
     }
     
